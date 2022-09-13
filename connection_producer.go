@@ -64,12 +64,12 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 	}
 
 	switch {
-	case len(c.Hosts) == 0:
-		return nil, fmt.Errorf("hosts cannot be empty")
-	case len(c.Username) == 0:
-		return nil, fmt.Errorf("username cannot be empty")
-	case len(c.Password) == 0:
-		return nil, fmt.Errorf("password cannot be empty")
+	case len(c.ClusterID) == 0:
+		return nil, fmt.Errorf("cluster_id cannot be empty")
+	case len(c.AccessKey) == 0:
+		return nil, fmt.Errorf("access_key cannot be empty")
+	case len(c.SecretKey) == 0:
+		return nil, fmt.Errorf("secret_key cannot be empty")
 	}
 
 	if c.TLS {
@@ -83,6 +83,7 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 	}
 
 	c.Initialized = true
+	verifyConnection = false // TBD: Check the cluster status with public APIs and don't make the connection
 
 	if verifyConnection {
 		if _, err := c.Connection(ctx); err != nil {
