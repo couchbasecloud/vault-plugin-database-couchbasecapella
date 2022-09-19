@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -180,7 +179,6 @@ const (
 	headerKeyTimestamp     = "Couchbase-Timestamp"
 	headerKeyAuthorization = "Authorization"
 	headerKeyContentType   = "Content-Type"
-	clusterAPIEndpoint     = "/v3/clusters/"
 )
 
 type CapellaClient struct {
@@ -191,12 +189,6 @@ type CapellaClient struct {
 }
 
 func NewClient(baseURL, access, secret string) *CapellaClient {
-	if baseURL == "" {
-		defaultBaseUrl := "https://cloudapi.cloud.couchbase.com"
-		if baseURL = os.Getenv("BASE_URL"); baseURL == "" {
-			baseURL = defaultBaseUrl
-		}
-	}
 	return &CapellaClient{
 		baseURL:    baseURL,
 		access:     access,
@@ -267,7 +259,7 @@ type UserCreateAccess struct {
 }
 
 func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey,
-	bucketName string, username string, password string, roleName string) error {
+	cloudAPIclustersEndPoint string, bucketName string, username string, password string, roleName string) error {
 
 	c := NewCapellaClient(baseUrl, accessKey, secretKey)
 	if c == nil {
@@ -296,16 +288,16 @@ func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secre
 		}
 	}
 
-	resp, err := c.Do(http.MethodPost, clusterAPIEndpoint+clusterID+"/users", userCreatePayload)
+	resp, err := c.Do(http.MethodPost, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload)
 	if resp != nil && resp.StatusCode != 201 {
 		defer resp.Body.Close()
 		b, err1 := io.ReadAll(resp.Body)
 		if err1 != nil {
 			return fmt.Errorf("Failed during capella user creation, reading response error = %v, ep = %s, user = %v",
-				err1, clusterAPIEndpoint+clusterID+"/users", userCreatePayload.Username)
+				err1, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username)
 		}
 		return fmt.Errorf("Failed during capella user creation, response = %s, ep = %s, user = %v",
-			string(b), clusterAPIEndpoint+clusterID+"/users", userCreatePayload.Username)
+			string(b), cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username)
 	}
 	if err != nil {
 		return err
@@ -314,12 +306,12 @@ func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secre
 	return nil
 }
 
-func DeleteCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey, username string) error {
+func DeleteCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey, cloudAPIclustersEndPoint string, username string) error {
 	c := NewCapellaClient(baseUrl, accessKey, secretKey)
-	resp, err := c.Do(http.MethodDelete, clusterAPIEndpoint+clusterID+"/users/"+username, nil)
+	resp, err := c.Do(http.MethodDelete, cloudAPIclustersEndPoint+"/"+clusterID+"/users/"+username, nil)
 	if resp != nil && resp.StatusCode != 204 {
 		return fmt.Errorf("Failed during capella user deletion, response = %v, ep = %s",
-			resp, clusterAPIEndpoint+clusterID+"/users/"+username)
+			resp, cloudAPIclustersEndPoint+"/"+clusterID+"/users/"+username)
 	}
 	if err != nil {
 		return err
