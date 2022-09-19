@@ -15,16 +15,19 @@ import (
 )
 
 type couchbaseCapellaDBConnectionProducer struct {
-	AccessKey   string `json:"access_key"`
-	SecretKey   string `json:"secret_key"`
-	ClusterID   string `json:"cluster_id"`
-	Hosts       string `json:"hosts"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	TLS         bool   `json:"tls"`
-	InsecureTLS bool   `json:"insecure_tls"`
-	Base64Pem   string `json:"base64pem"`
-	BucketName  string `json:"bucket_name"`
+	AccessKey            string `json:"access_key"`
+	SecretKey            string `json:"secret_key"`
+	ClusterID            string `json:"cluster_id"`
+	ClusterType          string `json:"cluster_type"`
+	CloudAPIBaseURL      string `json:"cloud_api_base_url"`
+	CloudAPIClustersPath string `json:"cloud_api_clusters_path"`
+	Hosts                string `json:"hosts"`
+	Username             string `json:"username"`
+	Password             string `json:"password"`
+	TLS                  bool   `json:"tls"`
+	InsecureTLS          bool   `json:"insecure_tls"`
+	Base64Pem            string `json:"base64pem"`
+	BucketName           string `json:"bucket_name"`
 
 	Initialized bool
 	rawConfig   map[string]interface{}
@@ -70,6 +73,14 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 		return nil, fmt.Errorf("access_key cannot be empty")
 	case len(c.SecretKey) == 0:
 		return nil, fmt.Errorf("secret_key cannot be empty")
+	case len(c.CloudAPIBaseURL) == 0:
+		c.CloudAPIBaseURL = "https://cloudapi.cloud.couchbase.com"
+	case len(c.ClusterType) == 0:
+		c.ClusterType = "provisioned"
+	case len(c.CloudAPIClustersPath) == 0 && c.ClusterType == "provisioned":
+		c.CloudAPIClustersPath = "/v3/clusters"
+	case len(c.CloudAPIClustersPath) == 0 && c.ClusterType == "invpc":
+		c.CloudAPIClustersPath = "/v2/clusters"
 	}
 
 	if c.TLS {

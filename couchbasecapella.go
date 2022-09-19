@@ -121,9 +121,10 @@ func (c *CouchbaseCapellaDB) DeleteUser(ctx context.Context, req dbplugin.Delete
 	c.RLock()
 	defer c.RUnlock()
 
-	err := DeleteCapellaUser("https://cloudapi.cloud.couchbase.com", c.couchbaseCapellaDBConnectionProducer.ClusterID,
+	err := DeleteCapellaUser(c.CloudAPIBaseURL, c.couchbaseCapellaDBConnectionProducer.ClusterID,
 		c.couchbaseCapellaDBConnectionProducer.AccessKey,
 		c.couchbaseCapellaDBConnectionProducer.SecretKey,
+		c.couchbaseCapellaDBConnectionProducer.CloudAPIClustersPath,
 		req.Username)
 	if err != nil {
 		return dbplugin.DeleteUserResponse{}, err
@@ -147,7 +148,7 @@ func newUser(ctx context.Context, c *couchbaseCapellaDBConnectionProducer, usern
 		return errwrap.Wrapf("error unmarshalling roles and groups creation statement JSON: {{err}}", err)
 	}
 
-	err = CreateCapellaUser("https://cloudapi.cloud.couchbase.com", c.ClusterID, c.AccessKey, c.SecretKey, "*", username, req.Password, "")
+	err = CreateCapellaUser(c.CloudAPIBaseURL, c.ClusterID, c.AccessKey, c.SecretKey, c.CloudAPIClustersPath, "*", username, req.Password, "")
 	if err != nil {
 		return err
 	}
