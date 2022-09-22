@@ -148,7 +148,8 @@ func newUser(ctx context.Context, c *couchbaseCapellaDBConnectionProducer, usern
 		return errwrap.Wrapf("error unmarshalling roles and groups creation statement JSON: {{err}}", err)
 	}
 
-	err = CreateCapellaUser(c.CloudAPIBaseURL, c.ClusterID, c.AccessKey, c.SecretKey, c.CloudAPIClustersPath, "*", username, req.Password, "")
+	err = CreateCapellaUser(c.CloudAPIBaseURL, c.ClusterID, c.AccessKey, c.SecretKey, c.CloudAPIClustersPath, c.BucketName,
+		c.ScopeName, username, req.Password, c.AccessRole)
 	if err != nil {
 		return err
 	}

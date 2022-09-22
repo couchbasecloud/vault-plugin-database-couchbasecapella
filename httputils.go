@@ -259,31 +259,30 @@ type UserCreateAccess struct {
 }
 
 func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey,
-	cloudAPIclustersEndPoint string, bucketName string, username string, password string, roleName string) error {
+	cloudAPIclustersEndPoint string, bucketName string, scopeName string, username string, password string, roleName string) error {
 
 	c := NewCapellaClient(baseUrl, accessKey, secretKey)
 	if c == nil {
 		return fmt.Errorf("Failed in creating capella client, %v", c)
 	}
 
-	if roleName == "" || len(roleName) == 0 {
-		roleName = "data_writer"
-	}
 	var userCreatePayload UserCreatePayload
-	if bucketName != "" || len(bucketName) == 0 {
+	if len(bucketName) != 0 {
 		userCreatePayload = UserCreatePayload{
 			Username: username,
 			Password: password,
 			Buckets: []UserCreateAccess{
 				{
 					Name:  bucketName,
-					Scope: "*",
+					Scope: scopeName,
 					Roles: roleName,
 				},
 			},
 		}
 	} else {
 		userCreatePayload = UserCreatePayload{
+			Username:         username,
+			Password:         password,
 			AllBucketsAccess: roleName,
 		}
 	}
@@ -293,11 +292,11 @@ func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secre
 		defer resp.Body.Close()
 		b, err1 := io.ReadAll(resp.Body)
 		if err1 != nil {
-			return fmt.Errorf("Failed during capella user creation, reading response error = %v, ep = %s, user = %v",
-				err1, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username)
+			return fmt.Errorf("Failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v",
+				err1, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username, userCreatePayload)
 		}
-		return fmt.Errorf("Failed during capella user creation, response = %s, ep = %s, user = %v",
-			string(b), cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username)
+		return fmt.Errorf("Failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v",
+			string(b), cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username, userCreatePayload)
 	}
 	if err != nil {
 		return err
