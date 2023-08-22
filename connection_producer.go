@@ -10,24 +10,26 @@ import (
 
 	"github.com/couchbase/gocb/v2"
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/database/helper/connutil"
 	"github.com/mitchellh/mapstructure"
 )
 
 type couchbaseCapellaDBConnectionProducer struct {
-	AccessKey            string `json:"access_key"`
-	SecretKey            string `json:"secret_key"`
+	Username             string `json:"username"`
+	Password             string `json:"password"`
+	OrganizationID       string `json:"organization_id"`
+	ProjectID            string `json:"project_id"`
 	ClusterID            string `json:"cluster_id"`
 	ClusterType          string `json:"cluster_type"`
 	CloudAPIBaseURL      string `json:"cloud_api_base_url"`
+	ConnectURL           string `json:"connect_url"`
 	CloudAPIClustersPath string `json:"cloud_api_clusters_path"`
 	BucketName           string `json:"bucket_name"`
-	ScopeName            string `json:"scope_name"`
 	AccessRole           string `json:"access_role"`
 
+	logger      hclog.Logger
 	Hosts       string `json:"hosts"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
 	TLS         bool   `json:"tls"`
 	InsecureTLS bool   `json:"insecure_tls"`
 	Base64Pem   string `json:"base64pem"`
@@ -41,7 +43,7 @@ type couchbaseCapellaDBConnectionProducer struct {
 
 func (c *couchbaseCapellaDBConnectionProducer) secretValues() map[string]string {
 	return map[string]string{
-		c.Password: "[password]",
+		c.Password: "{{password}}",
 		c.Username: "[username]",
 	}
 }
@@ -51,8 +53,11 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 	c.Lock()
 	defer c.Unlock()
 
-	c.rawConfig = initConfig
-
+	c.logger = hclog.New(&hclog.LoggerOptions{})
+	if c.rawConfig == nil {
+		c.logger.Info("Init, setting initconfig")
+		c.rawConfig = initConfig
+	}
 	decoderConfig := &mapstructure.DecoderConfig{
 		Result:           c,
 		WeaklyTypedInput: true,
@@ -70,12 +75,16 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 	}
 
 	switch {
+	case len(c.OrganizationID) == 0:
+		return nil, fmt.Errorf("organization_id cannot be empty")
+	case len(c.ProjectID) == 0:
+		return nil, fmt.Errorf("project_id cannot be empty")
 	case len(c.ClusterID) == 0:
 		return nil, fmt.Errorf("cluster_id cannot be empty")
-	case len(c.AccessKey) == 0:
-		return nil, fmt.Errorf("access_key cannot be empty")
-	case len(c.SecretKey) == 0:
-		return nil, fmt.Errorf("secret_key cannot be empty")
+	case len(c.Username) == 0:
+		return nil, fmt.Errorf("root username (access_key) cannot be empty")
+	case len(c.Password) == 0:
+		return nil, fmt.Errorf("rootuser password (secret_key) cannot be empty")
 	}
 
 	if len(c.CloudAPIBaseURL) == 0 {
@@ -89,11 +98,10 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 	} else if len(c.CloudAPIClustersPath) == 0 && c.ClusterType == "invpc" {
 		c.CloudAPIClustersPath = "/v2/clusters"
 	}
+	c.CloudAPIClustersPath = fmt.Sprintf("/organizations/%s/projects/%s/clusters/%s", c.OrganizationID, c.ProjectID, c.ClusterID)
+
 	if len(c.AccessRole) == 0 {
 		c.AccessRole = "data_writer"
-	}
-	if len(c.ScopeName) == 0 {
-		c.ScopeName = "*"
 	}
 
 	if c.TLS {
@@ -114,6 +122,11 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 			c.close()
 			return nil, errwrap.Wrapf("error verifying connection: {{err}}", err)
 		}
+	}
+
+	if c.secretValues()["Password"] != "" {
+		c.logger.Info("couchbaseCapellaDBConnectionProducer, init, setting the password to the secret values ")
+		initConfig["password"] = c.secretValues()["Password"]
 	}
 
 	return initConfig, nil

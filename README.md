@@ -10,7 +10,7 @@ The plugin supports the generation of static and dynamic user roles and root cre
 
 ## Build
 
-To build this package for any platform you will need to clone this repository and cd into the repo directory and `go build -o couchbasecapella-database-plugin ./cmd/couchbasecapella-database-plugin/`. To test `go test` will execute a set of basic tests against against the docker.io/couchbase/server-sandbox:6.5.0 couchbase database image. To test against different sandbox images, for example 5.5.1, set the `COUCHBASE_VERSION=5.5.1` environment variable. If you want to run the tests against a local couchbase installation or an already running couchbase container, set the environment variable `COUCHBASE_HOST` before executing. **Note** you will need to align the Administrator username, password and bucket_name with the pre-set values in the `couchbasecapella_test.go` file. Set VAULT_ACC to execute all of the tests. A subset of tests can be run using the command `go test -run TestDriver/Init` for example.
+To build this package for any platform you will need to clone this repository and cd into the repo directory and `go build -o couchbasecapella-database-plugin ./cmd/couchbasecapella-database-plugin/`.
 
 ## Installation
 
@@ -24,120 +24,202 @@ You will need to define a plugin directory using the `plugin_directory` configur
 Sample commands for registering and starting to use the plugin:
 
 ```bash
-$ SHA256=$(shasum -a 256 plugins/couchbasecapella-database-plugin | cut -d' ' -f1)
+SHA256=$(shasum -a 256 plugins/couchbasecapella-database-plugin | cut -d' ' -f1)
 
-$ vault secrets enable database
+vault secrets enable database
 
-$ vault write sys/plugins/catalog/database/couchbasecapella-database-plugin sha256=$SHA256 \
+vault write sys/plugins/catalog/database/couchbasecapella-database-plugin sha256=$SHA256 \
         command=couchbasecapella-database-plugin
 ```
 
 At this stage you are now ready to initialize the plugin to connect to couchbase capella cluster using unencrypted or encrypted communications.
 
-Prior to initializing the plugin, ensure that you have created an administration account. Vault will use the user specified here to create/update/revoke database credentials. That user must have the appropriate permissions to perform actions upon other database users.
+Prior to initializing the plugin, ensure that you have created a couchbase capella provisioned cluster along with V4 API keys. Vault will use the user specified settings here to create/update/revoke database credentials. That user must have the appropriate permissions to perform actions upon other database users.
 
-### Unencrypted plugin initialization
+### Plugin initialization
 
-```bash
-$ vault write database/config/insecure-couchbasecapella plugin_name="couchbasecapella-database-plugin" \
-        hosts="localhost" username="Administrator" password="password" \
-        bucket_name="travel-sample" \ # only needed for pre-6.5.0 clusters
-        allowed_roles="insecure-couchbasecapella-admin-role,insecure-couchbasecapella-*-bucket-role,static-account"
-
-# You should consider rotating the admin password. Note that if you do, the new password will never be made available
-# through Vault, so you should create a vault-specific database admin user for this.
-$ vault write -force database/rotate-root/insecure-couchbasecapella
-
- ```
-
-Note: If you want to connect the plugin to a couchbase capella cluster prior to version 6.5.0 you will also have to supply an existing bucket (bucket_name="travel-sample") or the command will fail with the error message **"error verifying connection: error in Connection waiting for cluster: unambiguous timeout"**.
-
-### Encrypted plugin initialization
-
-The example here uses the self signed CA certificate that comes with the out of the box couchbase cluster installation and is not suitable for real production use where commercial grade certificates should be obtained.
+#### Set Vault Address to the local or hosted server
 
 ```bash
-$ BASE64PEM=$(curl -X GET http://Administrator:Admin123@127.0.0.1:8091/pools/default/certificate|base64 -w0)
-
-$ vault write database/config/secure-couchbasecapella plugin_name="couchbasecapella-database-plugin" \
-      hosts="couchbases://localhost" username="Administrator" password="password" \
-      tls=true base64pem=${BASE64PEM} \
-      bucket_name="travel-sample" \ # only needed for pre-6.5.0 clusters
-      allowed_roles="secure-couchbasecapella-admin-role,secure-couchbasecapella-*-bucket-role,static-account"
-
-# You should consider rotating the admin password. Note that if you do, the new password will never be made available
-# through Vault, so you should create a vault-specific database admin user for this.
-$ vault write -force database/rotate-root/secure-couchbasecapella
+export VAULT_ADDR=http://127.0.0.1:8200
 ```
+
+#### Set the Capella required password policy
+
+```bash
+
+cat >password_policy.hcl << EOF
+length=64
+
+rule "charset" {
+  charset = "abcdefghijklmnopqrstuvwxyz"
+  min-chars = 1
+}
+
+rule "charset" {
+  charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  min-chars = 1
+}
+
+rule "charset" {
+  charset = "0123456789"
+  min-chars = 1
+}
+
+rule "charset" {
+  charset = "#@%!"
+  min-chars = 1
+}
+EOF
+
+vault write sys/policies/password/couchbasecapella \
+   policy=@password_policy.hcl
+```  
+
+<code>Success! Data written to: sys/policies/password/couchbasecapella</code>
+
+#### Initialize the database plugin 
+
+<code># Usage
+vault write database/config/couchbasecapella-database \
+    plugin_name="couchbasecapella-database-plugin" \
+    cloud_api_base_url="https://cloudapi.dev.nonprod-project-avengers.com/v4" \
+    organization_id="<org_uuid>" \
+    project_id="<proj_uuid>" \
+    cluster_id="<cluster_uuid>" \
+    username="<v4-access-api-key>" \
+    password='<v4-secret-api-key>' \
+    password_policy="couchbasecapella" \
+    allowed_roles="*"
+</code>
+
+```bash
+vault write database/config/couchbasecapella-database \
+    plugin_name="couchbasecapella-database-plugin" \
+    cloud_api_base_url="https://cloudapi.dev.nonprod-project-avengers.com/v4" \
+    organization_id="6af08c0a-8cab-4c1c-b257-b521575c16d0" \
+    project_id="d352361d-8de1-445b-9969-873b6decb63a" \
+    cluster_id="47820643-6e1f-4fea-b63c-625d1e10b536" \
+    username="haI3UAw1VEOGvxjBFWDEBhnpB0nF74qf" \
+    password='EUlfonfGtx#s1RlqPYryIlmcBgWuTIaMgvJ6%lrQIdu5QwCDW5oJRdeVwa3qynh7' \
+    password_policy="couchbasecapella" \
+    allowed_roles="*"
+```
+<code>Success! Data written to: database/config/couchbasecapella-database</code>
+
+You should consider rotating the root password (same as secretKey). Note that if you do, the new password(secret) will never be made available through Vault, so you should create a vault-specific database admin user for this.
+
+```bash
+vault write -force database/rotate-root/couchbasecapella-database
+```
+<code>Success! Data written to: database/rotate-root/couchbasecapella-database</code>
 
 ### Dynamic Role Creation
 
-When you create roles, you need to provide a JSON string containing the Couchbase RBAC roles which are documented [here](https://docs.couchbase.com/server/6.5/learn/security/roles.html). From Couchbase 6.5 groups are supported and the creation statement can contain just roles or just groups or a mixture of the two. **Note** to use a group, it must have been created in the database previously.
+When you create roles, you need to provide a JSON string containing the access with Couchbase RBAC roles which are documented [here](http://cbc-cp-api.s3-website-us-east-1.amazonaws.com/#tag/databaseCredentials/operation/postDatabaseCredential).
+
+NOTE: if a creation_statement is not provided readonly for all buckets(with all scopes and collections), <code>'{access: [{ privileges: [ data_reader ], resources: { buckets: [ { name :* } ] } }]}'</code>
+
+#### dynamicrole1 with a specific bucket, scope with both data read and write.
 
 ```bash
-# if a creation_statement is not provided the user account will default to read only admin, '{"roles":[{"role":"ro_admin"}]}'
-$ vault write database/roles/insecure-couchbasecapella-admin-role db_name=insecure-couchbasecapella \
-        default_ttl="5m" max_ttl="1h" creation_statements='{"roles":[{"role":"admin"}],"groups":["Supervisor"]}'
-
-$ vault write database/roles/insecure-couchbasecapella-travel-sample-bucket-role db_name=insecure-couchbasecapella \
-        default_ttl="5m" max_ttl="1h" creation_statements='{"roles":[{"role":"bucket_full_access","bucket_name":"travel-sample"}]}'
-Success! Data written to: database/roles/insecure-couchbasecapella-travel-sample-bucket-role
+vault write database/roles/dynamicrole1 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "vault-bucket-1", "scopes": [ { "name": "vault-bucket-1-scope-1", "collections": [ "*" ] } ] } ] } } ]}' default_ttl="5m" max_ttl="1h"
 ```
 
-If you create a role that uses groups on a pre 6.5 couchbase server it will be successful, but when you try to generate credentials
-you will receive the error **rpc error: code = Unknown desc = {"errors":{"groups":"Unsupported key"}} ...**
+<code>Success! Data written to: database/roles/dynamicrole1</code>
+
+#### dynamicrole2 with a list of 3 buckets (its all scopes &collections) access previleges of both data read and write.
+
+```bash
+vault write database/roles/dynamicrole2 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "db-cred-test-12Qj", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-3zRb", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-FcAv", "scopes": [ { "name": "*" } ] } ] } } ]}' default_ttl="5m" max_ttl="1h" 
+```
+
+<code>Success! Data written to: database/roles/dynamicrole2</code>
+
+#### dynamicrole3 with all buckets
+```bash
+vault write database/roles/dynamicrole3 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader" ], "resources": { "buckets": [ { "name": "*" } ] } } ]}' default_ttl="5m" max_ttl="1h"
+```
+
+<code>Success! Data written to: database/roles/dynamicrole3</code>
+
 
 To retrieve the credentials for the dynamic accounts
 
 ```bash
-
-$ vault read database/creds/insecure-couchbasecapella-admin-role
-Key                Value
----                -----
-lease_id           database/creds/insecure-couchbasecapella-admin-role/KJ7CTmpFni6U6BCDJ14HcmDm
-lease_duration     5m
-lease_renewable    true
-password           A1a-yCSH5rAh8QAkCzwu
-username           v-token-insecure-couchbasecapella-admin-role-yA2hgb0tfewf
-
-$ vault read database/creds/insecure-couchbasecapella-travel-sample-bucket-role
-Key                Value
----                -----
-lease_id           database/creds/insecure-couchbasecapella-travel-sample-bucket-role/OzHdfkIZdeY9p8kjdWur512j
-lease_duration     5m
-lease_renewable    true
-password           A1a-0yTIuO4q0dCvphz1
-username           v-token-insecure-couchbasecapella-travel-sample-bucket-role-iN5
-
+vault read database/creds/dynamicrole1
 ```
+<code>Key                Value
+    ---                -----
+    lease_id           database/creds/dynamicrole1/qyaXNzyh53U1w5zIlSHAR7be
+    lease_duration     5m
+    lease_renewable    true
+    password           !maOKglPc7IIccb!CftAC7rLsXQlxUvGKgpEnzzAYpbiifcYfVpF3E8jiyNvABtN
+    username           V_TOKEN_MYDYNAMICROLE3_OAKVWMKBMT1P9IGJS1TT_1692391736
+</code>
+
+
+```bash
+vault read database/creds/dynamicrole2
+```
+
+<code>Key                Value
+        ---                -----
+        lease_id           database/creds/dynamicrole2/spZ3NGneJYkptKnTgru8MJlb
+        lease_duration     5m
+        lease_renewable    true
+        password           AVPuT#oF0cGzPIfBnaqMGsHjm9vorXwaOUw8ezP7b1k@mbTwBcRL72c@7@NDDyr0
+        username           V_TOKEN_MYDYNAMICROLE3_8O0M5CKNWNSF2EA6VYLW_1692391739
+</code>
+
+```bash
+vault read database/creds/dynamicrole3
+```
+
+<code>Key                Value
+        ---                -----
+        lease_id           database/creds/dynamicrole3/5ok4TllgYHg6QH4vsawqt2mY
+        lease_duration     5m
+        lease_renewable    true
+        password           VVE2T4AkW%LsUgBGsY5c8opt09gB2vWhefUyJ@%qPxy%saO56d4ZPntiHkQDmiUf
+        username           V_TOKEN_MYDYNAMICROLE3_ZOFAJPGLNZNQMSZCBUFK_1692391706
+</code>
 
 ### Static Role Creation
 
-In order to use static roles, the user must already exist in the Couchbase Capella security settings. The example below assumes that there is an existing user with the name "vault-edu". If the user does not exist you will receive the following error.
+In order to use static roles, the database credential user must already exist in the Couchbase Capella security settings. The example below assumes that there is an existing user with the name "vault-edu". 
+
 
 ```bash
-* 1 error occurred:
-        * error setting credentials: rpc error: code = Unknown desc = user not found | {"unique_id":"74f229fd-b3b3-4036-9673-312adae094bb","endpoint":"http://localhost:8091"}
+
+# Usage: 
+vault write database/static-roles/<role-name> db_name=couchbasecapella-database username="<db-cred-user-name>" rotation_period=<secs> 
 ```
 
+<code>Success! Data written to: database/static-roles/<role-name></code>
+
 ```bash
-$ vault write database/static-roles/static-account db_name=insecure-couchbasecapella \
+# Example:
+vault write database/static-roles/static-account db_name=couchbasecapella-database \
         username="vault-edu" rotation_period="5m"
-Success! Data written to: database/static-roles/static-account
-````
+```
+
+<code>Success! Data written to: database/static-roles/static-account</code>
 
 To retrieve the credentials for the vault-edu user
 
 ```bash
-$ vault read database/static-creds/static-account
-Key                    Value
----                    -----
-last_vault_rotation    2020-06-15T14:32:16.682130141-05:00
-password               A1a-09ApRvglZY1Usdjp
-rotation_period        5m
-ttl                    30s
-username               vault-edu
+vault read database/static-creds/static-account
 ```
+
+<code>Key                    Value
+          ---                    -----
+          last_vault_rotation    2023-08-04T19:28:21.229382-07:00
+          password               wFgNaxdH2wGw2i9-B0Qj
+          rotation_period        5m
+          ttl                    4m59s
+          username               vault-edu
+</code>
 
 ## Developing
 

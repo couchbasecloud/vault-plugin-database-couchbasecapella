@@ -1,14 +1,17 @@
 package couchbasecapella
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
-	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-secure-stdlib/strutil"
 	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
 	"github.com/hashicorp/vault/sdk/database/helper/credsutil"
@@ -17,28 +20,31 @@ import (
 
 const (
 	couchbaseCapellaTypeName        = "couchbasecapella"
-	defaultCouchbaseCapellaUserRole = `{"Roles": [{"role":"ro_admin"}]}`
-	defaultTimeout                  = 20000 * time.Millisecond
+	defaultCouchbaseCapellaUserRole = `{"access": [{
+		  "privileges": [
+			"data_reader"
+		  ],
+		  "resources": {
+			"buckets": [
+				{ "name" :"*" }
+			]
+		  }
+		  }]}`
+	defaultTimeout = 20000 * time.Millisecond
 
 	defaultUserNameTemplate = `{{printf "V_%s_%s_%s_%s" (printf "%s" .DisplayName | uppercase | truncate 64) (printf "%s" .RoleName | uppercase | truncate 64) (random 20 | uppercase) (unix_time) | truncate 128}}`
 )
 
 var _ dbplugin.Database = &CouchbaseCapellaDB{}
+var logger hclog.Logger
 
 // Type that combines the custom plugins Couchbase Capella database connection configuration options and the Vault CredentialsProducer
 // used for generating user information for the Couchbase Capella database.
 type CouchbaseCapellaDB struct {
 	*couchbaseCapellaDBConnectionProducer
 	credsutil.CredentialsProducer
-
 	usernameProducer template.StringTemplate
-}
-
-// Type that combines the Couchbase Capella Roles and Groups representing specific account permissions. Used to pass roles and or
-// groups between the Vault server and the custom plugin in the dbplugin.Statements
-type RolesAndGroups struct {
-	Roles  []gocb.Role `json:"roles"`
-	Groups []string    `json:"groups"`
+	logger           hclog.Logger
 }
 
 // New implements builtinplugins.BuiltinFactory
@@ -55,7 +61,9 @@ func new() *CouchbaseCapellaDB {
 
 	db := &CouchbaseCapellaDB{
 		couchbaseCapellaDBConnectionProducer: connProducer,
+		logger:                               hclog.New(&hclog.LoggerOptions{}),
 	}
+	logger = hclog.New(&hclog.LoggerOptions{})
 
 	return db
 }
@@ -82,6 +90,8 @@ func (c *CouchbaseCapellaDB) Initialize(ctx context.Context, req dbplugin.Initia
 	resp := dbplugin.InitializeResponse{
 		Config: req.Config,
 	}
+
+	c.logger.Info(fmt.Sprintf("Initialize, resp=%v", resp))
 	return resp, nil
 }
 
@@ -108,9 +118,53 @@ func (c *CouchbaseCapellaDB) NewUser(ctx context.Context, req dbplugin.NewUserRe
 	return resp, nil
 }
 
+func callVaultAPI(method, path string, requestData map[string]interface{}, responseData interface{}) error {
+	vaultAddr := os.Getenv("VAULT_ADDR")
+	if len(vaultAddr) == 0 {
+		vaultAddr = "http://127.0.0.1:8200"
+	}
+	vaultToken := os.Getenv("VAULT_TOKEN")
+	if len(vaultToken) == 0 {
+		vaultToken = os.Getenv("VAULT_DEV_ROOT_TOKEN_ID")
+		if len(vaultToken) == 0 {
+			vaultToken = "root"
+		}
+	}
+	url := fmt.Sprintf("%s/v1/%s", vaultAddr, path)
+	reqData, err := json.Marshal(requestData)
+	if err != nil {
+		return err
+	}
+
+	logger.Info(fmt.Sprintf("Attempting HTTP : %s %s", method, url))
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(reqData))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("X-Vault-Token", vaultToken)
+
+	client := http.Client{}
+	defer client.CloseIdleConnections()
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if responseData != nil {
+		if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (c *CouchbaseCapellaDB) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
 	if req.Password != nil {
-		err := c.changeUserPassword(ctx, req.Username, req.Password.NewPassword)
+		newpassword := req.Password.NewPassword
+		pwd, err := c.changeUserPassword(ctx, req.Username, newpassword)
+		c.logger.Info("after change pwd=%v", pwd)
 		return dbplugin.UpdateUserResponse{}, err
 	}
 	return dbplugin.UpdateUserResponse{}, nil
@@ -121,10 +175,9 @@ func (c *CouchbaseCapellaDB) DeleteUser(ctx context.Context, req dbplugin.Delete
 	c.RLock()
 	defer c.RUnlock()
 
-	err := DeleteCapellaUser(c.CloudAPIBaseURL, c.couchbaseCapellaDBConnectionProducer.ClusterID,
-		c.couchbaseCapellaDBConnectionProducer.AccessKey,
-		c.couchbaseCapellaDBConnectionProducer.SecretKey,
-		c.couchbaseCapellaDBConnectionProducer.CloudAPIClustersPath,
+	err := DeleteCapellaDbCredUser(c.CloudAPIBaseURL, c.couchbaseCapellaDBConnectionProducer.CloudAPIClustersPath,
+		c.couchbaseCapellaDBConnectionProducer.Username,
+		c.couchbaseCapellaDBConnectionProducer.Password,
 		req.Username)
 	if err != nil {
 		return dbplugin.DeleteUserResponse{}, err
@@ -139,17 +192,11 @@ func newUser(ctx context.Context, c *couchbaseCapellaDBConnectionProducer, usern
 		statements = append(statements, defaultCouchbaseCapellaUserRole)
 	}
 
-	jsonRoleAndGroupData := []byte(statements[0])
+	c.logger.Info(fmt.Sprintf("%s :: %s :: %s :: %s :: %s :: %s", c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
+		username, req.Password))
 
-	var rag RolesAndGroups
-
-	err := json.Unmarshal(jsonRoleAndGroupData, &rag)
-	if err != nil {
-		return errwrap.Wrapf("error unmarshalling roles and groups creation statement JSON: {{err}}", err)
-	}
-
-	err = CreateCapellaUser(c.CloudAPIBaseURL, c.ClusterID, c.AccessKey, c.SecretKey, c.CloudAPIClustersPath, c.BucketName,
-		c.ScopeName, username, req.Password, c.AccessRole)
+	err := CreateCapellaDbCredUser(c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
+		username, req.Password, statements[0])
 	if err != nil {
 		return err
 	}
@@ -157,35 +204,22 @@ func newUser(ctx context.Context, c *couchbaseCapellaDBConnectionProducer, usern
 	return nil
 }
 
-func (c *CouchbaseCapellaDB) changeUserPassword(ctx context.Context, username, password string) error {
+func (c *CouchbaseCapellaDB) changeUserPassword(ctx context.Context, username, password string) (string, error) {
 	// Don't let anyone write the config while we're using it
 	c.RLock()
 	defer c.RUnlock()
+	c.logger.Info(fmt.Sprintf("%s :: %s :: %s :: %s :: %s :: %s", c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
+		username, password))
+	pwd, err := UpdateCapellaDbCredUser(c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
+		username, password)
 
-	db, err := c.getConnection(ctx)
+	c.logger.Info(fmt.Sprintf("changeUserPassword, new password: %s", pwd))
+	c.logger.Info(fmt.Sprintf("changeUserPassword, after change secretValues %v", c.secretValues()))
 	if err != nil {
-		return err
+		return pwd, err
 	}
 
-	// Get the UserManager
-	mgr := db.Users()
-	user, err := mgr.GetUser(username, nil)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve user %s: %w", username, err)
-	}
-	user.User.Password = password
-
-	err = mgr.UpsertUser(user.User,
-		&gocb.UpsertUserOptions{
-			Timeout:    computeTimeout(ctx),
-			DomainName: "local",
-		})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return pwd, nil
 }
 
 func removeEmpty(strs []string) []string {
