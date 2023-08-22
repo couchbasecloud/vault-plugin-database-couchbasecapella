@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-version"
 
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"io"
 	"strconv"
 )
@@ -88,7 +90,7 @@ func createUser(hostname string, port int, adminuser, adminpassword, username, p
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.Status != "200 OK" {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("createUser returned %s", resp.Status)
 	}
 	return nil
@@ -110,7 +112,7 @@ func createGroup(hostname string, port int, adminuser, adminpassword, group, rol
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.Status != "200 OK" {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("createGroup returned %s", resp.Status)
 	}
 	return nil
@@ -186,6 +188,7 @@ type CapellaClient struct {
 	access     string
 	secret     string
 	httpClient *http.Client
+	logger     hclog.Logger
 }
 
 func NewClient(baseURL, access, secret string) *CapellaClient {
@@ -194,7 +197,37 @@ func NewClient(baseURL, access, secret string) *CapellaClient {
 		access:     access,
 		secret:     secret,
 		httpClient: http.DefaultClient,
+		logger:     hclog.New(&hclog.LoggerOptions{}),
 	}
+}
+
+func (c *CapellaClient) sendRequest(method string, url string, payload string) (*http.Response, error) {
+	c.httpClient.Timeout = 30 * time.Second
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	//log.Printf("\n\n\t%s %s\n\tAuthorization: %s\n\t%s\n", method, url, authToken, payload)
+	req, err := http.NewRequest(method, url, bytes.NewBuffer([]byte(payload)))
+	if err != nil {
+		fmt.Printf("client: could not create request: %s\n", err)
+		fmt.Printf("error=%v", err)
+		return nil, err
+	}
+	authToken := "Bearer " + base64.StdEncoding.EncodeToString([]byte(c.access+":"+c.secret))
+
+	req.Header.Set("Authorization", authToken)
+	//req.Header.Set("X-forwarded-for", clientIP)
+	if req.Method == http.MethodPost || req.Method == http.MethodPut {
+		if strings.Contains(url, "?") {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		} else {
+			req.Header.Set("Content-Type", "application/json")
+		}
+	}
+
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	return c.httpClient.Do(req)
+
 }
 
 func (c *CapellaClient) Do(method, uri string, body interface{}) (*http.Response, error) {
@@ -245,58 +278,39 @@ func Unmarshal(body io.Reader, v interface{}) error {
 
 // --
 
-type UserCreatePayload struct {
-	Username         string             `json:"username,omitempty"`
-	Password         string             `json:"password,omitempty"`
-	AllBucketsAccess string             `json:"allBucketsAccess,omitempty"`
-	Buckets          []UserCreateAccess `json:"buckets,omitempty"`
-}
-
-type UserCreateAccess struct {
-	Name  string `json:"name"`
-	Scope string `json:"scope"`
-	Roles string `json:"access"`
-}
-
-func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey,
-	cloudAPIclustersEndPoint string, bucketName string, scopeName string, username string, password string, roleName string) error {
+func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, accessKey string, secretKey,
+	username string, password string, access string) error {
 
 	c := NewCapellaClient(baseUrl, accessKey, secretKey)
 	if c == nil {
-		return fmt.Errorf("Failed in creating capella client, %v", c)
+		return fmt.Errorf("failed in creating capella client, %v", c)
 	}
 
-	var userCreatePayload UserCreatePayload
-	if len(bucketName) != 0 {
-		userCreatePayload = UserCreatePayload{
-			Username: username,
-			Password: password,
-			Buckets: []UserCreateAccess{
-				{
-					Name:  bucketName,
-					Scope: scopeName,
-					Roles: roleName,
-				},
-			},
-		}
-	} else {
-		userCreatePayload = UserCreatePayload{
-			Username:         username,
-			Password:         password,
-			AllBucketsAccess: roleName,
-		}
+	var accessdata map[string]interface{}
+	err := json.Unmarshal([]byte(access), &accessdata)
+	if err != nil {
+		return fmt.Errorf("failed during capella user creation, unmarshal of access statement error = %v, user = %v, access statement=%v",
+			err, username, access)
+	}
+	adata, err := json.Marshal(accessdata["access"])
+	if err != nil {
+		return fmt.Errorf("failed during capella user creation, marshal of access statement error = %v, user = %v, access statement=%v",
+			err, username, accessdata["access"])
 	}
 
-	resp, err := c.Do(http.MethodPost, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload)
+	data := fmt.Sprintf("{\"name\":\"%s\", \"password\":\"%s\", \"access\":%v}", username, password, string(adata))
+
+	ep := c.baseURL + cloudAPIclustersEndPoint + "/users"
+	resp, err := c.sendRequest(http.MethodPost, ep, string(data))
 	if resp != nil && resp.StatusCode != 201 {
 		defer resp.Body.Close()
 		b, err1 := io.ReadAll(resp.Body)
 		if err1 != nil {
-			return fmt.Errorf("Failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v",
-				err1, cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username, userCreatePayload)
+			return fmt.Errorf("failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v,client=%v",
+				err1, ep, username, data, c)
 		}
-		return fmt.Errorf("Failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v",
-			string(b), cloudAPIclustersEndPoint+"/"+clusterID+"/users", userCreatePayload.Username, userCreatePayload)
+		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v, access=%s, secret=%s",
+			string(b), ep, username, data, accessKey, secretKey)
 	}
 	if err != nil {
 		return err
@@ -305,15 +319,158 @@ func CreateCapellaUser(baseUrl string, clusterID string, accessKey string, secre
 	return nil
 }
 
-func DeleteCapellaUser(baseUrl string, clusterID string, accessKey string, secretKey, cloudAPIclustersEndPoint string, username string) error {
+func UpdateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, accessKey string, secretKey, username string, password string) (string, error) {
 	c := NewCapellaClient(baseUrl, accessKey, secretKey)
-	resp, err := c.Do(http.MethodDelete, cloudAPIclustersEndPoint+"/"+clusterID+"/users/"+username, nil)
+
+	if username != accessKey { // db cred update
+		userId, err := getDbCredId(baseUrl, cloudAPIclustersEndPoint, accessKey, secretKey, username)
+		if userId == "" || err != nil {
+			return "", err
+		}
+
+		data := fmt.Sprintf("{\"password\":\"%s\"}", password)
+		ep := c.baseURL + cloudAPIclustersEndPoint + "/users/" + userId
+		resp, err := c.sendRequest(http.MethodPut, ep, data)
+		if resp != nil && resp.StatusCode != http.StatusNoContent {
+			return "", fmt.Errorf("failed during capella db cred user update, response = %v, ep = %s, payload=%s",
+				resp, ep, data)
+		}
+		if err != nil {
+			return "", err
+		}
+
+	} else { // secret key rotation
+		apiPathSlices := strings.Split(cloudAPIclustersEndPoint, "/")
+		ep := c.baseURL + "/organizations/" + apiPathSlices[2] + "/apikeys/" + username + "/rotate"
+		data := fmt.Sprintf("{\"secret\":\"%s\"}", password)
+		c.logger.Info(fmt.Sprintf("%s %s %s", http.MethodPost, ep, data))
+		resp, err := c.sendRequest(http.MethodPost, ep, data)
+		if resp != nil && resp.StatusCode != 201 {
+			return "", fmt.Errorf("failed during capella secret key rotate, response = %v, ep = %s",
+				resp, ep)
+		}
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed during capella user id fetch unmarshal, response = %v, ep = %s, error=%v",
+				resp, ep, err)
+		}
+		var content map[string]string
+		err = json.Unmarshal([]byte(body), &content)
+		if err != nil {
+			return "", fmt.Errorf("failed during capella user id fetch unmarshal, response = %v, ep = %s, error=%v",
+				resp, ep, err)
+		}
+		return content["secretKey"], nil
+	}
+	return "", nil
+}
+
+func DeleteCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, accessKey string, secretKey, username string) error {
+	c := NewCapellaClient(baseUrl, accessKey, secretKey)
+
+	userId, err := getDbCredId(baseUrl, cloudAPIclustersEndPoint, accessKey, secretKey, username)
+	if userId == "" || err != nil {
+		return err
+	}
+	ep := c.baseURL + cloudAPIclustersEndPoint + "/users/" + userId
+	resp, err := c.sendRequest(http.MethodDelete, ep, "")
 	if resp != nil && resp.StatusCode != 204 {
-		return fmt.Errorf("Failed during capella user deletion, response = %v, ep = %s",
-			resp, cloudAPIclustersEndPoint+"/"+clusterID+"/users/"+username)
+		return fmt.Errorf("failed during capella user deletion, response = %v, ep = %s",
+			resp, ep)
 	}
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+type Hrefs struct {
+	First    string `json:"first"`
+	Last     string `json:"last"`
+	Next     string `json:"next"`
+	Previous string `json:"previous"`
+}
+type Pages struct {
+	// Last Last page number.
+	Last int `json:"last"`
+
+	// Next Next page number, it is not set on the last page.
+	Next *int `json:"next,omitempty"`
+
+	// Page Current page starting from 1.
+	Page int `json:"page"`
+
+	// PerPage How many items are displayed in the page.
+	PerPage int `json:"perPage"`
+
+	// Previous Previous page number, it is not set on the first page.
+	Previous *int `json:"previous,omitempty"`
+
+	// TotalItems Total items found by the given query.
+	TotalItems int `json:"totalItems"`
+}
+type Cursor struct {
+	Hrefs Hrefs `json:"hrefs"`
+	Pages Pages `json:"pages"`
+}
+
+type ListDbCredResponse struct {
+	Cursor Cursor        `json: "cursor"`
+	Data   []interface{} `json:"data"`
+}
+
+func getDbCredId(baseUrl string, cloudAPIclustersEndPoint string, accessKey string, secretKey, username string) (string, error) {
+	c := NewCapellaClient(baseUrl, accessKey, secretKey)
+	dbUserId := ""
+	page := 1
+	ep := fmt.Sprintf("%s%s/users?page=%d&perPage=100", c.baseURL, cloudAPIclustersEndPoint, page)
+	for page > 0 {
+		resp, _ := c.sendRequest(http.MethodGet, ep, "")
+		if resp.StatusCode != http.StatusOK {
+			return dbUserId, fmt.Errorf("failed during capella user id fetch, response = %v, ep = %s",
+				resp, ep)
+		} else {
+			defer resp.Body.Close()
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return dbUserId, fmt.Errorf("failed during capella user id fetch unmarshal, response = %v, ep = %s, error=%v",
+					resp, ep, err)
+			}
+			var content ListDbCredResponse
+			err = json.Unmarshal([]byte(body), &content)
+			if err != nil {
+				return dbUserId, fmt.Errorf("failed during capella user id fetch unmarshal, response = %v, ep = %s, error=%v",
+					resp, ep, err)
+			}
+			d := content.Data
+
+			if d == nil {
+				return dbUserId, fmt.Errorf("failed during capella user id response data, response = %v, ep = %s, body=%v",
+					resp, ep, body)
+			}
+			for _, data := range d {
+				d1 := data.(map[string]interface{})
+				dbusername := d1["name"].(string)
+				if dbusername == username {
+					dbUserId = d1["id"].(string)
+					return dbUserId, nil
+				}
+			}
+			// next page
+			page = content.Cursor.Pages.Page
+			if page == 0 {
+				return dbUserId, fmt.Errorf("failed during capella user id fetch unmarshal, response = %v, ep = %s, error=%v",
+					resp, ep, "db user id is not found for the given username")
+			} else {
+				ep = content.Cursor.Hrefs.Next
+			}
+		}
+	}
+	return dbUserId, nil
 }

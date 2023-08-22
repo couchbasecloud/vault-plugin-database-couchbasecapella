@@ -4,7 +4,7 @@ import (
 	"os"
 
 	hclog "github.com/hashicorp/go-hclog"
-	couchbase "github.com/hashicorp/vault-plugin-database-couchbase"
+	couchbasecapella "github.com/hashicorp/vault-plugin-database-couchbasecapella"
 	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
 )
 
@@ -20,7 +20,7 @@ func main() {
 
 // Run instantiates a CouchbaseDB object, and runs the RPC server for the plugin
 func Run() error {
-	dbplugin.ServeMultiplex(couchbase.New)
+	dbplugin.ServeMultiplex(couchbasecapella.New)
 
 	return nil
 }
