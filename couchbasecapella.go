@@ -1,12 +1,8 @@
 package couchbasecapella
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -91,7 +87,6 @@ func (c *CouchbaseCapellaDB) Initialize(ctx context.Context, req dbplugin.Initia
 		Config: req.Config,
 	}
 
-	c.logger.Info(fmt.Sprintf("Initialize, resp=%v", resp))
 	return resp, nil
 }
 
@@ -118,53 +113,10 @@ func (c *CouchbaseCapellaDB) NewUser(ctx context.Context, req dbplugin.NewUserRe
 	return resp, nil
 }
 
-func callVaultAPI(method, path string, requestData map[string]interface{}, responseData interface{}) error {
-	vaultAddr := os.Getenv("VAULT_ADDR")
-	if len(vaultAddr) == 0 {
-		vaultAddr = "http://127.0.0.1:8200"
-	}
-	vaultToken := os.Getenv("VAULT_TOKEN")
-	if len(vaultToken) == 0 {
-		vaultToken = os.Getenv("VAULT_DEV_ROOT_TOKEN_ID")
-		if len(vaultToken) == 0 {
-			vaultToken = "root"
-		}
-	}
-	url := fmt.Sprintf("%s/v1/%s", vaultAddr, path)
-	reqData, err := json.Marshal(requestData)
-	if err != nil {
-		return err
-	}
-
-	logger.Info(fmt.Sprintf("Attempting HTTP : %s %s", method, url))
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(reqData))
-	if err != nil {
-		return err
-	}
-	req.Header.Add("X-Vault-Token", vaultToken)
-
-	client := http.Client{}
-	defer client.CloseIdleConnections()
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if responseData != nil {
-		if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (c *CouchbaseCapellaDB) UpdateUser(ctx context.Context, req dbplugin.UpdateUserRequest) (dbplugin.UpdateUserResponse, error) {
 	if req.Password != nil {
 		newpassword := req.Password.NewPassword
-		pwd, err := c.changeUserPassword(ctx, req.Username, newpassword)
-		c.logger.Info("after change pwd=%v", pwd)
+		_, err := c.changeUserPassword(ctx, req.Username, newpassword)
 		return dbplugin.UpdateUserResponse{}, err
 	}
 	return dbplugin.UpdateUserResponse{}, nil
@@ -192,9 +144,6 @@ func newUser(ctx context.Context, c *couchbaseCapellaDBConnectionProducer, usern
 		statements = append(statements, defaultCouchbaseCapellaUserRole)
 	}
 
-	c.logger.Info(fmt.Sprintf("%s :: %s :: %s :: %s :: %s :: %s", c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
-		username, req.Password))
-
 	err := CreateCapellaDbCredUser(c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
 		username, req.Password, statements[0])
 	if err != nil {
@@ -208,13 +157,9 @@ func (c *CouchbaseCapellaDB) changeUserPassword(ctx context.Context, username, p
 	// Don't let anyone write the config while we're using it
 	c.RLock()
 	defer c.RUnlock()
-	c.logger.Info(fmt.Sprintf("%s :: %s :: %s :: %s :: %s :: %s", c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
-		username, password))
 	pwd, err := UpdateCapellaDbCredUser(c.CloudAPIBaseURL, c.CloudAPIClustersPath, c.Username, c.Password,
 		username, password)
 
-	c.logger.Info(fmt.Sprintf("changeUserPassword, new password: %s", pwd))
-	c.logger.Info(fmt.Sprintf("changeUserPassword, after change secretValues %v", c.secretValues()))
 	if err != nil {
 		return pwd, err
 	}

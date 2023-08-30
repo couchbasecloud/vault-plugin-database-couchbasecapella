@@ -43,7 +43,7 @@ type couchbaseCapellaDBConnectionProducer struct {
 
 func (c *couchbaseCapellaDBConnectionProducer) secretValues() map[string]string {
 	return map[string]string{
-		c.Password: "{{password}}",
+		c.Password: "[password]",
 		c.Username: "[username]",
 	}
 }
