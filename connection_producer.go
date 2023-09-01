@@ -55,7 +55,6 @@ func (c *couchbaseCapellaDBConnectionProducer) Init(ctx context.Context, initCon
 
 	c.logger = hclog.New(&hclog.LoggerOptions{})
 	if c.rawConfig == nil {
-		c.logger.Info("Init, setting initconfig")
 		c.rawConfig = initConfig
 	}
 	decoderConfig := &mapstructure.DecoderConfig{
