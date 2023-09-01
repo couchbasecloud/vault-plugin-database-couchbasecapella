@@ -13,7 +13,15 @@ The plugin supports the generation of static and dynamic user roles and root cre
 
 To build this package for any platform you will need to clone this repository and cd into the repo directory and `go build -o couchbasecapella-database-plugin ./cmd/couchbasecapella-database-plugin/`.
 To run some of the tests, create a provisioned Capella cluster instance and run it locally similar to the below example.
-% go test -v -apiUrl='https://cloudapi.dev.nonprod-project-avengers.com/v4' -orgId='6af08c0a-8cab-4c1c-b257-b521575c16d0' -projectId='d352361d-8de1-445b-9969-873b6decb63a' -clusterId='92236592-9f74-475e-afeb-0609b743c41b' -adminUserAccessKey='NbMSRuuUlVNuvFCLNDVc9Hk9xvoqMbKP' -adminUserSecretKey='eNJMuUwHP95vxSftiBsjO2WPS1znWcIQlng64PKIkUjCf5#yBVWDS8tFtFnGt7es'
+```bash
+go test -v \
+-apiUrl='https://cloudapi.dev.nonprod-project-avengers.com/v4' \
+-orgId='6af08c0a-8cab-4c1c-b257-b521575c16d0' \
+-projectId='d352361d-8de1-445b-9969-873b6decb63a' \
+-clusterId='92236592-9f74-475e-afeb-0609b743c41b' \
+-adminUserAccessKey='NbMSRuuUlVNuvFCLNDVc9Hk9xvoqMbKP' \
+-adminUserSecretKey='eNJMuUwHP95vxSftiBsjO2WPS1znWcIQlng64PKIkUjCf5#yBVWDS8tFtFnGt7es'
+```
 
 
 ## Installation
