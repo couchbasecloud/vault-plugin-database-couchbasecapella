@@ -135,7 +135,11 @@ NOTE: if a creation_statement is not provided readonly for all buckets(with all 
 #### dynamicrole1 with a specific bucket, scope with both data read and write.
 
 ```bash
-vault write database/roles/dynamicrole1 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "vault-bucket-1", "scopes": [ { "name": "vault-bucket-1-scope-1", "collections": [ "*" ] } ] } ] } } ]}' default_ttl="5m" max_ttl="1h"
+vault write database/roles/dynamicrole1 \
+db_name="couchbasecapella-database" \
+creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "vault-bucket-1", "scopes": [ { "name": "vault-bucket-1-scope-1", "collections": [ "*" ] } ] } ] } } ]}' \
+default_ttl="5m" \
+max_ttl="1h"
 ```
 
 <code>Success! Data written to: database/roles/dynamicrole1</code>
@@ -143,14 +147,22 @@ vault write database/roles/dynamicrole1 db_name="couchbasecapella-database" crea
 #### dynamicrole2 with a list of 3 buckets (its all scopes &collections) access previleges of both data read and write.
 
 ```bash
-vault write database/roles/dynamicrole2 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "db-cred-test-12Qj", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-3zRb", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-FcAv", "scopes": [ { "name": "*" } ] } ] } } ]}' default_ttl="5m" max_ttl="1h" 
+vault write database/roles/dynamicrole2 \
+db_name="couchbasecapella-database" \
+creation_statements='{"access": [ { "privileges": [ "data_reader", "data_writer" ], "resources": { "buckets": [ { "name": "db-cred-test-12Qj", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-3zRb", "scopes": [ { "name": "*" } ] }, { "name": "db-cred-test-FcAv", "scopes": [ { "name": "*" } ] } ] } } ]}' \
+default_ttl="5m" \
+max_ttl="1h" 
 ```
 
 <code>Success! Data written to: database/roles/dynamicrole2</code>
 
 #### dynamicrole3 with all buckets
 ```bash
-vault write database/roles/dynamicrole3 db_name="couchbasecapella-database" creation_statements='{"access": [ { "privileges": [ "data_reader" ], "resources": { "buckets": [ { "name": "*" } ] } } ]}' default_ttl="5m" max_ttl="1h"
+vault write database/roles/dynamicrole3 \
+db_name="couchbasecapella-database" \
+creation_statements='{"access": [ { "privileges": [ "data_reader" ], "resources": { "buckets": [ { "name": "*" } ] } } ]}' \
+default_ttl="5m" \
+max_ttl="1h"
 ```
 
 <code>Success! Data written to: database/roles/dynamicrole3</code>
