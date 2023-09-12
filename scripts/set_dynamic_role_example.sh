@@ -11,7 +11,7 @@ vault write database/roles/mydynamicrole1 db_name="couchbasecapella-database" cr
 				  {
 					"name": "vault-bucket-1-scope-1",
 					"collections": [
-						"*"
+						"vault-bucket-1-scope-1-collect-1"
 					]
 				  }
 				]
