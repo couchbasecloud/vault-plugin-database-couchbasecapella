@@ -23,11 +23,11 @@ var (
 
 func init() {
 	flag.StringVar(&apiUrl, "apiUrl", "https://cloudapi.dev.nonprod-project-avengers.com/v4", "The base URL for the Couchbase Capella Cloud API")
-	flag.StringVar(&orgId, "orgId", "6af08c0a-8cab-4c1c-b257-b521575c16d0", "The organization ID for the Couchbase Capella Cloud API")
-	flag.StringVar(&projectId, "projectId", "d352361d-8de1-445b-9969-873b6decb63a", "The project ID for the Couchbase Capella Cloud API")
-	flag.StringVar(&clusterId, "clusterId", "226329e6-a08f-4545-a179-bdd3368f058d", "The cluster ID for the Couchbase Capella Cloud API")
-	flag.StringVar(&adminUserAccessKey, "adminUserAccessKey", "YsOwvsMeAbY4kuSd3iobv8aFm7iaYW53", "The admin user apiKey for the Couchbase Capella Cloud API")
-	flag.StringVar(&adminUserSecretKey, "adminUserSecretKey", "J#UFmruj2pZreWNr7kJ8mdziC4u!gN5TON4FZCUzaElSKiJDofd76cLiCtLnSdZn", "The admin user secretKey for the Couchbase Capella Cloud API")
+	flag.StringVar(&orgId, "orgId", "", "The organization ID for the Couchbase Capella Cloud API")
+	flag.StringVar(&projectId, "projectId", "", "The project ID for the Couchbase Capella Cloud API")
+	flag.StringVar(&clusterId, "clusterId", "", "The cluster ID for the Couchbase Capella Cloud API")
+	flag.StringVar(&adminUserAccessKey, "adminUserAccessKey", "", "The admin user apiKey for the Couchbase Capella Cloud API")
+	flag.StringVar(&adminUserSecretKey, "adminUserSecretKey", "", "The admin user secretKey for the Couchbase Capella Cloud API")
 }
 
 var connectionDetails = map[string]interface{}{
@@ -150,6 +150,27 @@ func revokeUser(t *testing.T, username string) error {
 
 func TestDriver(t *testing.T) {
 
+	// Check if the required flags are set
+	if len(apiUrl) == 0 {
+		t.Fatal("apiUrl cannot be empty")
+	}
+	if len(orgId) == 0 {
+		t.Fatal("orgId cannot be empty. Set it through the env variable ORG_ID or -orgId flag")
+	}
+	if len(projectId) == 0 {
+		t.Fatal("projectId cannot be empty. Set it through the env variable PROJECT_ID or -projectId flag")
+	}
+	if len(clusterId) == 0 {
+		t.Fatal("clusterId cannot be empty. Set it through the env variable CLUSTER_ID or -clusterId flag")
+	}
+	if len(adminUserAccessKey) == 0 {
+		t.Fatal("adminUserAccessKey cannot be empty. Set it through the env variable ADMIN_USER_ACCESS_KEY or -adminUserAccessKey flag")
+	}
+	if len(adminUserSecretKey) == 0 {
+		t.Fatal("adminUserSecretKey cannot be empty. Set it through the env variable ADMIN_USER_SECRET_KEY or -adminUserSecretKey flag")
+	}
+
+	// Set up the connection details
 	connectionDetails["cloud_api_base_url"] = apiUrl
 	connectionDetails["organization_id"] = orgId
 	connectionDetails["project_id"] = projectId

@@ -3,7 +3,8 @@ TEST?=$$(go list ./... | grep -v /vendor/ | grep -v teamcity)
 VETARGS?=-asmdecl -atomic -bool -buildtags -copylocks -methods -nilfunc -printf -rangeloops -shift -structtags -unsafeptr
 BUILD_TAGS?=${TOOL}
 GOFMT_FILES?=$$(find . -name '*.go' | grep -v vendor)
-GO_TEST_CMD?=go test -v
+TEST_ARGS?=-orgId='$(ORG_ID)' -projectId='$(PROJECT_ID)' -clusterId='$(CLUSTER_ID)' -adminUserAccessKey='$(ADMIN_USER_ACCESS_KEY)' -adminUserSecretKey='$(ADMIN_USER_SECRET_KEY)'
+GO_TEST_CMD?=go test -v ${TEST_ARGS}
 
 # bin generates the releaseable binaries for this plugin
 bin: fmtcheck
