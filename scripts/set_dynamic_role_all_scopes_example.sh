@@ -6,19 +6,19 @@ vault write database/roles/mydynamicrole2 db_name="couchbasecapella-database" cr
 		  "resources": {
 			"buckets": [
 				{ 
-					"name": "db-cred-test-12Qj", 
+					"name": "vault-bucket-1", 
 					"scopes": [
 						{ "name": "*" }
 					]
 				},
 				{ 
-					"name": "db-cred-test-3zRb", 
+					"name": "vault-bucket-2", 
 					"scopes": [
 						{ "name": "*" }
 					]
 				},
 				{ 
-					"name": "db-cred-test-FcAv", 
+					"name": "vault-bucket-3", 
 					"scopes": [
 						{ "name": "*" }
 					]

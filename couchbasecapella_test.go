@@ -252,7 +252,12 @@ func testCouchbaseCapellaDBRotateRootCredentials(t *testing.T) {
 	// rotate back
 	t.Logf("Rotating back to original adminUserAccessKey: %s", adminUserSecretKey)
 	rotatePasswordBack := adminUserSecretKey
+	connectionDetails["password"] = rotatePassword
 	adminUserSecretKey = rotatePassword
+	db, err = setupCouchbaseCapellaDBInitialize(t)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
 
 	updateReq = dbplugin.UpdateUserRequest{
 		Username: adminUserAccessKey,
@@ -265,8 +270,8 @@ func testCouchbaseCapellaDBRotateRootCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
-
-	adminUserSecretKey = rotatePassword
+	adminUserSecretKey = rotatePasswordBack
+	connectionDetails["password"] = rotatePasswordBack
 
 	db.Close()
 
