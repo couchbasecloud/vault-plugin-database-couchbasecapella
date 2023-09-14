@@ -304,13 +304,15 @@ func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 	resp, err := c.sendRequest(http.MethodPost, ep, string(data))
 	if resp != nil && resp.StatusCode != 201 {
 		defer resp.Body.Close()
+		// obfuscate password in the log
+		obfData := fmt.Sprintf("{\"name\":\"%s\", \"password\":\"[password]\", \"access\":%v}", username, string(adata))
 		b, err1 := io.ReadAll(resp.Body)
 		if err1 != nil {
 			return fmt.Errorf("failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v,client=%v",
-				err1, ep, username, data, c)
+				err1, ep, username, obfData, c)
 		}
 		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v, access=%s, secret=%s",
-			string(b), ep, username, data, accessKey, secretKey)
+			string(b), ep, username, obfData, accessKey, secretKey)
 	}
 	if err != nil {
 		return err
