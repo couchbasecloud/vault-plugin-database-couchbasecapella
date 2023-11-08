@@ -10,9 +10,6 @@ require (
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/vault/sdk v0.9.2
-	github.com/labstack/gommon v0.4.0 // indirect
-	github.com/lib/pq v1.8.0 // indirect
+	github.com/labstack/gommon v0.4.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/ory/dockertest/v3 v3.8.0
-	github.com/stretchr/testify v1.8.2
 )
