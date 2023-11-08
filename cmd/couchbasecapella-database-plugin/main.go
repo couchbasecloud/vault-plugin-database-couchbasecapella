@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
+	couchbasecapella "github.com/couchbasecloud/vault-plugin-database-couchbasecapella"
 	hclog "github.com/hashicorp/go-hclog"
-	couchbasecapella "github.com/hashicorp/vault-plugin-database-couchbasecapella"
 	dbplugin "github.com/hashicorp/vault/sdk/database/dbplugin/v5"
 )
 
