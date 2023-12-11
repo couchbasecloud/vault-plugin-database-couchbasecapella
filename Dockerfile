@@ -1,5 +1,5 @@
 # Stage 1: Build the Vault plugin
-FROM golang:1.19 as builder
+FROM golang:1.21 as builder
 
 ARG PLUGIN_NAME=vault-plugin-database-couchbasecapella
 ARG PLUGIN_DIR=/vault/plugins/
@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o ${PLUGIN_DIR}/${PLUGIN_NAME} "./cmd/cou
 RUN shasum -a 256 "${PLUGIN_DIR}/${PLUGIN_NAME}" | cut -d " " -f1 > ${PLUGIN_DIR}/${PLUGIN_NAME}.sha256
 
 # Stage 2: Add the plugin to the Vault image
-FROM hashicorp/vault:1.14
+FROM hashicorp/vault:1.15
 
 ARG PLUGIN_NAME=vault-plugin-database-couchbasecapella
 ARG PLUGIN_DIR=/vault/plugins/
