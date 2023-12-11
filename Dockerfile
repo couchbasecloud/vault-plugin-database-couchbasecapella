@@ -2,7 +2,7 @@
 FROM golang:1.21 as builder
 
 ARG PLUGIN_NAME=couchbasecapella-database-plugin
-ARG PLUGIN_DIR=/vault/plugins/
+ARG PLUGIN_DIR=/vault/plugins
 
 # Install Git
 RUN apt-get update && \
