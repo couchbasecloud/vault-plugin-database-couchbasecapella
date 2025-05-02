@@ -212,9 +212,8 @@ func (c *CapellaClient) sendRequest(method string, url string, payload string) (
 		fmt.Printf("error=%v", err)
 		return nil, err
 	}
-	authToken := "Bearer " + base64.StdEncoding.EncodeToString([]byte(c.access+":"+c.secret))
 
-	req.Header.Set("Authorization", authToken)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.secret))
 	//req.Header.Set("X-forwarded-for", clientIP)
 	if req.Method == http.MethodPost || req.Method == http.MethodPut {
 		if strings.Contains(url, "?") {
