@@ -311,8 +311,8 @@ func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 			return fmt.Errorf("failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v,client=%v",
 				err1, ep, username, obfData, c)
 		}
-		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v, access=%s, secret=%s",
-			string(b), ep, username, obfData, accessKey, secretKey)
+		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v",
+			string(b), ep, username, obfData)
 	}
 	if err != nil {
 		return err
