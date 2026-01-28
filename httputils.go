@@ -345,7 +345,7 @@ func UpdateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 		apiPathSlices := strings.Split(cloudAPIclustersEndPoint, "/")
 		ep := c.baseURL + "/organizations/" + apiPathSlices[2] + "/apikeys/" + username + "/rotate"
 		data := fmt.Sprintf("{\"secret\":\"%s\"}", password)
-		c.logger.Info(fmt.Sprintf("%s %s %s", http.MethodPost, ep, data))
+		c.logger.Info(fmt.Sprintf("%s %s", http.MethodPost, ep))
 		resp, err := c.sendRequest(http.MethodPost, ep, data)
 		if resp != nil && resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("failed during capella secret key rotate, response = %v, ep = %s",
