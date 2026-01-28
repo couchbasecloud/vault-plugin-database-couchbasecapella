@@ -302,7 +302,7 @@ func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 
 	ep := c.baseURL + cloudAPIclustersEndPoint + "/users"
 	resp, err := c.sendRequest(http.MethodPost, ep, string(data))
-	if resp != nil && resp.StatusCode != 201 {
+	if resp != nil && resp.StatusCode != http.StatusCreated {
 		defer resp.Body.Close()
 		// obfuscate password in the log
 		obfData := fmt.Sprintf("{\"name\":\"%s\", \"password\":\"[password]\", \"access\":%v}", username, string(adata))
@@ -347,7 +347,7 @@ func UpdateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 		data := fmt.Sprintf("{\"secret\":\"%s\"}", password)
 		c.logger.Info(fmt.Sprintf("%s %s %s", http.MethodPost, ep, data))
 		resp, err := c.sendRequest(http.MethodPost, ep, data)
-		if resp != nil && resp.StatusCode != 201 {
+		if resp != nil && resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("failed during capella secret key rotate, response = %v, ep = %s",
 				resp, ep)
 		}
@@ -381,7 +381,7 @@ func DeleteCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 	}
 	ep := c.baseURL + cloudAPIclustersEndPoint + "/users/" + userId
 	resp, err := c.sendRequest(http.MethodDelete, ep, "")
-	if resp != nil && resp.StatusCode != 204 {
+	if resp != nil && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed during capella user deletion, response = %v, ep = %s",
 			resp, ep)
 	}
