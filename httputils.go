@@ -302,7 +302,7 @@ func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 
 	ep := c.baseURL + cloudAPIclustersEndPoint + "/users"
 	resp, err := c.sendRequest(http.MethodPost, ep, string(data))
-	if resp != nil && resp.StatusCode != 201 {
+	if resp != nil && resp.StatusCode != http.StatusCreated {
 		defer resp.Body.Close()
 		// obfuscate password in the log
 		obfData := fmt.Sprintf("{\"name\":\"%s\", \"password\":\"[password]\", \"access\":%v}", username, string(adata))
@@ -311,8 +311,8 @@ func CreateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 			return fmt.Errorf("failed during capella user creation, reading response error = %v, ep = %s, user = %v, payload=%v,client=%v",
 				err1, ep, username, obfData, c)
 		}
-		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v, access=%s, secret=%s",
-			string(b), ep, username, obfData, accessKey, secretKey)
+		return fmt.Errorf("failed during capella user creation, response = %s, ep = %s, user = %v, payload = %v",
+			string(b), ep, username, obfData)
 	}
 	if err != nil {
 		return err
@@ -345,9 +345,9 @@ func UpdateCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 		apiPathSlices := strings.Split(cloudAPIclustersEndPoint, "/")
 		ep := c.baseURL + "/organizations/" + apiPathSlices[2] + "/apikeys/" + username + "/rotate"
 		data := fmt.Sprintf("{\"secret\":\"%s\"}", password)
-		c.logger.Info(fmt.Sprintf("%s %s %s", http.MethodPost, ep, data))
+		c.logger.Info(fmt.Sprintf("%s %s", http.MethodPost, ep))
 		resp, err := c.sendRequest(http.MethodPost, ep, data)
-		if resp != nil && resp.StatusCode != 201 {
+		if resp != nil && resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("failed during capella secret key rotate, response = %v, ep = %s",
 				resp, ep)
 		}
@@ -381,7 +381,7 @@ func DeleteCapellaDbCredUser(baseUrl string, cloudAPIclustersEndPoint string, ac
 	}
 	ep := c.baseURL + cloudAPIclustersEndPoint + "/users/" + userId
 	resp, err := c.sendRequest(http.MethodDelete, ep, "")
-	if resp != nil && resp.StatusCode != 204 {
+	if resp != nil && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("failed during capella user deletion, response = %v, ep = %s",
 			resp, ep)
 	}
