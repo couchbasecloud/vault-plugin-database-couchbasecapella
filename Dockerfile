@@ -1,5 +1,5 @@
 # Stage 1: Build the Vault plugin
-FROM golang:1.21 as builder
+FROM golang:1.25 as builder
 
 ARG PLUGIN_NAME=couchbasecapella-database-plugin
 ARG PLUGIN_DIR=/vault/plugins
